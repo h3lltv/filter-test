@@ -1,0 +1,29 @@
+server:
+  compression:
+    enabled: true
+    mime-types: application/json
+    min-response-size: 1024
+
+spring:
+  application:
+    name: filter-test
+  r2dbc:
+    url: r2dbc:postgresql://localhost:5432/shop
+    username: shop
+    password: shop
+    pool:
+      enabled: true
+      initial-size: 5
+      max-size: 20
+      max-idle-time: 30m
+      max-acquire-time: 5s
+      validation-query: SELECT 1
+  flyway:
+    url: jdbc:postgresql://localhost:5432/shop
+    user: shop
+    password: shop
+
+shop:
+  matcher:
+    regex:
+      match-timeout: 50ms
