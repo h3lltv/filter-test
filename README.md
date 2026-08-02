@@ -55,14 +55,20 @@ curl "http://localhost:8080/shop/product/re2?nameFilter=^.*%5Beva%5D.*\$"
 ## Design notes
 
 - Rows stream from Postgres to the HTTP response via a single reactive pipeline
-  (`ProductRepository.streamAllAfter(afterId)` → `.filter(...)` → batched JSON encoding), so the
+  (`ProductRepository.streamAllAfter(offset)` → `.filter(...)` → batched JSON encoding), so the
   full result set is never materialized in memory regardless of table size.
 - The CPU-bound match evaluation runs on a dedicated `matcherScheduler`, off the Netty event-loop
   threads, so filtering on one request doesn't stall I/O for concurrent requests, and isolated from
   Reactor's shared global `Schedulers.parallel()` so it doesn't contend with unrelated CPU work.
 - The JSON response is written in batches (`JsonArrayBodyWriter`, 500 rows per flush) rather than
   flushing once per row — at millions of rows, per-row flushing dominates response time far more
-  than the database or payload size do.
+  than the database or payload size do. Response compression (`server.compression.enabled`) is also
+  on, since the JSON is highly repetitive text.
+- When `limit` is given, rows are fetched in bounded pages (`ProductRepository.streamPageAfter`,
+  a real SQL `LIMIT`), recursing only if more are needed. A `Flux.take(limit)` over an otherwise
+  unbounded query was tried first and rejected: R2DBC/Postgres don't reliably cancel an in-flight
+  query server-side just because the reactive subscriber stopped requesting, so the query kept
+  running in the background and its connection never returned to the pool.
 - Each request compiles its own matcher from its own `nameFilter`; nothing mutable is shared across
   requests or across rows within a request.
 
